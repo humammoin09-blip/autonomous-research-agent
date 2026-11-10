@@ -1,349 +1,212 @@
 <div align="center">
 
-# DevMemory-AI
+# Autonomous Research Agent (`autonomous-research-agent`)
 
-### *State-Aware, Context-Intelligent Autonomous Developer Assistant*
+**An autonomous, multi-step AI research pipeline built with LangGraph, Google Gemini, and the Tavily Search API that turns any topic into a structured, publication-ready Markdown report.**
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?logo=python&logoColor=white&style=for-the-badge)](https://www.python.org/)
-[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-ff69b4.svg?logo=langchain&logoColor=white&style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
-[![LangChain](https://img.shields.io/badge/Framework-LangChain-1C3C3C.svg?logo=langchain&logoColor=white&style=for-the-badge)](https://www.langchain.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
-[![Maintenance](https://img.shields.io/badge/Maintenance-Active-emerald.svg?style=for-the-badge)](#)
-
-<p align="center">
-  <b>DevMemory-AI</b> bridges the critical gap in modern LLM developer tooling: persistent cognitive state. Engineered with dual-layer memory hierarchies (Short-Term Conversational Checkpointing + Hierarchical Long-Term Namespaced Storage) over a cyclic ReAct graph execution loop.
-</p>
-
----
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
+[![Google Gemini](https://img.shields.io/badge/Google%20Gemini-ChatGoogleGenerativeAI-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Tavily](https://img.shields.io/badge/Tavily-Live%20Web%20Search-00A67E?style=for-the-badge)](https://tavily.com/)
+[![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-F37626?style=for-the-badge&logo=jupyter&logoColor=white)](https://jupyter.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 </div>
 
+---
+
 ## Table of Contents
-- [1. Overview & Problem Statement](#1-overview--problem-statement)
-- [2. System Architecture & Flow](#2-system-architecture--flow)
-- [3. Core Technical Highlights](#3-core-technical-highlights)
-  - [Dual-Layer Cognitive Memory Architecture](#dual-layer-cognitive-memory-architecture)
-  - [Dynamic Context Injection & Agent Personalization](#dynamic-context-injection--agent-personalization)
-  - [Cyclic ReAct Execution Engine](#cyclic-react-execution-engine)
-- [4. Custom Developer Tools](#4-custom-developer-tools)
-- [5. Technology Stack](#5-technology-stack)
-- [6. Repository Structure](#6-repository-structure)
-- [7. Getting Started & Prerequisites](#7-getting-started--prerequisites)
-- [8. Installation & Setup](#8-installation--setup)
-- [9. Environment Configuration](#9-environment-configuration)
-- [10. Usage & Code Walkthrough](#10-usage--code-walkthrough)
-- [11. Production Roadmap](#11-production-roadmap)
-- [12. License & Author](#12-license--author)
+
+- [Project Overview](#project-overview)
+- [Tech Stack](#tech-stack)
+- [Architecture & Workflow](#architecture--workflow)
+- [Setup & Installation](#setup--installation)
+- [Usage Example](#usage-example)
+- [Repository Structure](#repository-structure)
+- [Future Roadmap](#future-roadmap)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## 1. Overview & Problem Statement
+## Project Overview
 
-Standard Large Language Model (LLM) agents operate as **stateless reasoning engines**. While chat sessions can emulate continuity by replaying token buffers within an active window, they suffer from fundamental architectural flaws:
+Manual online research requires planning queries, scanning multiple sources, filtering out low-signal content, reconciling conflicting claims, and formatting findings into a readable brief.
 
-1. **Context Window Degradation & Token Bleed:** Appending unbounded historical dialogue explodes inference costs and degrades retrieval fidelity (the "needle-in-a-haystack" degradation).
-2. **Session Isolation:** Once a session concludes or a thread terminates, developer profile knowledge—such as preferred tech stacks, test conventions, architecture patterns, and stylistic nuances—is irrevocably lost.
-3. **Unstructured Recall:** Ad-hoc retrieval fails to distinguish ephemeral thread-level state from persistent cross-session knowledge.
+**`autonomous-research-agent`** automates that entire workflow as a deterministic, stateful graph. Given a single research topic, the agent:
 
-**DevMemory-AI** solves this through a formalized, graph-based architecture built on **LangGraph**. By decoupling **Short-Term Memory (STM)** via transactional thread checkpointing from **Long-Term Memory (LTM)** via hierarchical key-value namespaces, DevMemory-AI maintains rich developer profiles across disparate sessions while executing autonomous tool invocations in a robust ReAct loop.
-
----
-
-## 2. System Architecture & Flow
-
-DevMemory-AI models the agent lifecycle as an explicit state machine utilizing LangGraph's `StateGraph`.
-
-```
-                    ┌─────────────────────────┐
-                    │          START          │
-                    └────────────┬────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────┐
-                    │    Profile & Context    │
-                    │     LTM Extraction      │
-                    │ (Namespaces via Store)  │
-                    └────────────┬────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────┐
-       ┌───────────►│        chat_node        │
-       │            │  (System Prompt + LTM)  │
-       │            └────────────┬────────────┘
-       │                         │
-       │                [tools_condition]
-       │                         │
-       │         ┌───────────────┴───────────────┐
-       │         │ (Tool Calls Detected)         │ (No Tool Calls)
-       │         ▼                               ▼
-       │   ┌───────────┐                   ┌───────────┐
-       └───┤ ToolNode  │                   │    END    │
-           │ Execution │                   │ (Save STM)│
-           └───────────┘                   └───────────┘
-```
-
-### Execution Lifecycle:
-1. **Invocation:** The graph receives an input payload parameterized by `thread_id` (STM scope) and `user_id` (LTM scope).
-2. **Context Synthesis:** In `chat_node`, the runtime reads the LTM store at `("users", user_id, "details")`, resolves stored developer preferences, and injects them into the foundational system instructions.
-3. **Model Inference:** The LLM generates a response or emits structured tool-call vectors.
-4. **Conditional Routing (`tools_condition`):**
-   - If tool calls exist: State routes to `ToolNode`, runs the tools synchronously/asynchronously, commits outputs as `ToolMessage` instances, and loops back to `chat_node`.
-   - If no tool calls exist: Execution transitions to `END`, and the `MemorySaver` atomically checkpoints the state against the `thread_id`.
+1. **Plans** targeted search angles by decomposing the topic into focused sub-queries.
+2. **Searches** the live web via the Tavily API to gather up-to-date evidence and snippets.
+3. **Synthesizes** raw search results using Google Gemini—filtering noise, cross-checking sources, and resolving contradictory information.
+4. **Writes** a structured, publication-ready Markdown report complete with headings, comparison tables, and clear sections.
 
 ---
 
-## 3. Core Technical Highlights
+## Tech Stack
 
-### Dual-Layer Cognitive Memory Architecture
-
-DevMemory-AI strictly bifurcates state into ephemeral thread buffers and durable namespace stores:
-
-| Attribute | Short-Term Memory (STM) | Long-Term Memory (LTM) |
+| Component | Technology | Role in Pipeline |
 | :--- | :--- | :--- |
-| **Backing Engine** | `MemorySaver` (Checkpointer) | `InMemoryStore` / `PostgresStore` |
-| **Addressing Scheme** | `configurable: {"thread_id": "<uuid>"}` | Hierarchical tuple namespaces: `("users", user_id, "details")` |
-| **Lifespan** | Ephemeral or thread-bound | Durable across independent executions |
-| **Primary Role** | Dialogue continuity, ReAct intermediate outputs | Architectural preferences, stylistic rules, tech stacks |
-| **Scaling Vector** | Sliding window / message summarization | Indexed semantic & key-value queries |
-
-### Dynamic Context Injection & Agent Personalization
-Unlike naive vector augmentations, DevMemory-AI treats developer configurations deterministically:
-- Developers register preferences (e.g., `"Primary Stack: FastAPI, TypeScript; Strict typing; TDD with Pytest"`).
-- These profiles are stored under structured namespaces.
-- The `chat_node` intercepts incoming state and prepends an adaptive system directive containing the active profile before prompt resolution, eliminating manual context re-prompting.
-
-### Cyclic ReAct Execution Engine
-Constructed on LangGraph's cyclic paradigm:
-- Native schema validation via **Pydantic**.
-- Deterministic routing edges powered by `@langchain/core` / `tools_condition`.
-- Zero infinite-loop traps through graph recursion limits and validated execution traces.
+| **Orchestration** | [LangGraph](https://langchain-ai.github.io/langgraph/) (`StateGraph`) | Manages shared agent state and deterministic node-to-node execution |
+| **LLM Reasoning** | [Google Gemini](https://ai.google.dev/) (`ChatGoogleGenerativeAI`) | Query planning, noise filtering, contradiction resolution, and report drafting |
+| **Web Retrieval** | [Tavily Search API](https://tavily.com/) (`langchain-tavily`) | Real-time, LLM-optimized web search and snippet extraction |
+| **Environment** | `python-dotenv` | Loads API keys securely from a local `.env` file |
+| **Interactive Runtime** | Jupyter Notebook & `IPython` | Step-by-step experimentation and rich Markdown report rendering |
+| **Language** | Python 3.10+ | Core implementation |
 
 ---
 
-## 4. Custom Developer Tools
+## Architecture & Workflow
 
-DevMemory-AI includes production-hardened tools purpose-built for engineering workflows:
+The agent is modeled as a linear **4-node LangGraph `StateGraph`**. Each node reads from and updates a shared typed state object as execution progresses from topic intake to final Markdown output.
 
-### 1. Robust Engineering Calculator (`calculator`)
-- **Purpose:** Handles complex computational logic, algorithmic complexity assessments, and memory-footprint calculations.
-- **Safety:** Sandboxed evaluation supporting arithmetic and advanced mathematical functions via `math` primitives, avoiding insecure global `eval`.
-
-### 2. Deep Code & Text Analyzer (`analyze_text_code`)
-- **Purpose:** Real-time lexical analysis of snippets, diffs, documentation, and query strings.
-- **Metrics Tracked:**
-  - Raw character count (including & excluding whitespace).
-  - Total word tokens.
-  - Estimated sentence count / line density.
-  - Code block presence and syntax-level heuristic insights.
-
----
-
-## 5. Technology Stack
-
-- **Core Runtime & Language:** Python `3.10+`
-- **Graph Orchestration & State Engines:** [LangGraph](https://github.com/langchain-ai/langgraph) (`StateGraph`, `MemorySaver`, `InMemoryStore`, `ToolNode`)
-- **LLM Abstraction Layer:** [LangChain Core](https://github.com/langchain-ai/langchain) (`@langchain/core`)
-- **Supported Providers:** 
-  - Google Gemini API via `langchain-google-genai`
-  - OpenAI API via `langchain-openai`
-- **Data Modeling & Validation:** [Pydantic v2](https://docs.pydantic.dev/)
-- **Configuration & Environment Management:** `python-dotenv`
-
----
-
-## 6. Repository Structure
-
-```
-DevMemory-AI/
-├── src/
-│   ├── __init__.py
-│   ├── agent.py               # StateGraph definition, chat_node, and compilation
-│   ├── state.py               # AgentState schema (TypedDict / Pydantic models)
-│   ├── memory/
-│   │   ├── __init__.py
-│   │   ├── checkpointer.py    # MemorySaver (STM) configurations
-│   │   └── store.py           # InMemoryStore / PostgresStore (LTM) management
-│   ├── tools/
-│   │   ├── __init__.py
-│   │   ├── calculator.py      # Math & algorithmic calculation tool
-│   │   └── text_analyzer.py   # Code / Text lexical inspection tool
-│   └── utils/
-│       ├── __init__.py
-│       └── logger.py          # Structured logging and output formatting
-├── tests/
-│   ├── __init__.py
-│   ├── test_memory.py         # STM checkpointing & LTM persistence tests
-│   └── test_tools.py          # Unit tests for Calculator & Text Analyzer
-├── .env.example               # Template for required environment variables
-├── .gitignore                 # Standard Python, virtualenv, and cache ignores
-├── LICENSE                    # MIT License
-├── pyproject.toml             # Poetry / modern packaging specification
-├── requirements.txt           # Pinned production dependencies
-└── README.md                  # System architecture and documentation
+```mermaid
+flowchart LR
+    A([START]) --> B["planner_node<br/>Generate 3 sub-queries"]
+    B --> C["search_node<br/>Fetch live Tavily snippets"]
+    C --> D["synthesizer_node<br/>Filter noise & resolve contradictions"]
+    D --> E["writer_node<br/>Format structured Markdown report"]
+    E --> F([END])
 ```
 
+### The 4 Nodes
+
+1. **`planner_node`**
+   - **Input:** `topic` provided by the user.
+   - **Responsibility:** Uses `ChatGoogleGenerativeAI` to break down the overarching topic into **3 targeted sub-queries** designed to capture diverse angles (e.g., core concepts, recent developments, trade-offs/comparisons).
+   - **Output:** Populates the list of planned search queries in the graph state.
+
+2. **`search_node`**
+   - **Input:** The 3 sub-queries generated by `planner_node`.
+   - **Responsibility:** Executes real-time searches against the **Tavily Search API** for each sub-query and collects live web snippets, metadata, and source context.
+   - **Output:** Appends raw retrieved search results to the graph state.
+
+3. **`synthesizer_node`**
+   - **Input:** Raw search snippets gathered by `search_node`.
+   - **Responsibility:** Analyzes the collected material with the LLM to **filter out irrelevant noise**, deduplicate overlapping claims, and **resolve data contradictions** across competing sources.
+   - **Output:** Produces a clean, verified synthesis ready for final formatting.
+
+4. **`writer_node`**
+   - **Input:** Synthesized findings from `synthesizer_node`.
+   - **Responsibility:** Transforms the distilled insights into a **publication-ready Markdown report** organized with clear section headings, bulleted takeaways, Markdown tables, and cohesive narrative flow.
+   - **Output:** Stores the final Markdown report in the graph state.
+
 ---
 
-## 7. Getting Started & Prerequisites
+## Setup & Installation
 
 ### Prerequisites
-- **Python:** Version `3.10` or higher installed. Check with:
-  ```bash
-  python --version
-  ```
-- **API Keys:** Either an active **Google Gemini API Key** or an **OpenAI API Key**.
-- **Virtual Environment Tool:** `venv` or `conda`.
 
----
-
-## 8. Installation & Setup
+- **Python 3.10+** installed on your system
+- A **Google AI Studio API key** (`GOOGLE_API_KEY`) for Gemini
+- A **Tavily API key** (`TAVILY_API_KEY`) for real-time web search
 
 ### 1. Clone the Repository
+
 ```bash
-git clone https://github.com/your-username/DevMemory-AI.git
-cd DevMemory-AI
+git clone https://github.com/<your-username>/autonomous-research-agent.git
+cd autonomous-research-agent
 ```
 
-### 2. Initialize Virtual Environment
-```bash
-# On Linux / macOS
-python3 -m venv venv
-source venv/bin/activate
+### 2. Create & Activate a Virtual Environment (Recommended)
 
-# On Windows (PowerShell)
-python -m venv venv
-.\venv\Scripts\Activate.ps1
+```bash
+# Create virtual environment
+python -m venv .venv
+
+# Activate on macOS / Linux
+source .venv/bin/activate
+
+# Activate on Windows (PowerShell)
+.venv\Scripts\Activate.ps1
 ```
 
 ### 3. Install Dependencies
+
 ```bash
-pip install --upgrade pip
-pip install -r requirements.txt
+pip install langgraph langchain-google-genai langchain-tavily python-dotenv ipython
 ```
+
+### 4. Configure Environment Variables
+
+Create a `.env` file in the root directory of the repository and add your API keys:
+
+```env
+GOOGLE_API_KEY=your_google_gemini_api_key_here
+TAVILY_API_KEY=your_tavily_api_key_here
+```
+
+> **Security Note:** Never commit your `.env` file to version control. Ensure `.env` is listed in your `.gitignore`.
 
 ---
 
-## 9. Environment Configuration
+## Usage Example
 
-Create a `.env` file from the provided sample:
+Open `Autonomous_Research_Agent.ipynb` in Jupyter Notebook (or VS Code) and run the cells to compile the `StateGraph` into `workflow`.
 
-```bash
-cp .env.example .env
-```
-
-Populate the configuration values according to your target model provider:
-
-```ini
-# ==============================================================================
-# Model Provider Credentials (Configure at least one)
-# ==============================================================================
-GEMINI_API_KEY="your-gemini-api-key-here"
-OPENAI_API_KEY="your-openai-api-key-here"
-
-# Model Selection
-DEFAULT_MODEL_PROVIDER="gemini" # Options: "gemini" | "openai"
-DEFAULT_MODEL_NAME="gemini-1.5-pro-latest"
-
-# ==============================================================================
-# Runtime & Persistence Configurations
-# ==============================================================================
-DEBUG=False
-LANGCHAIN_TRACING_V2=false
-LANGCHAIN_API_KEY=""
-
-# (Optional) Future PostgreSQL Store Extension
-# POSTGRES_CONNECTION_STRING="postgresql://postgres:password@localhost:5432/devmemory"
-```
-
----
-
-## 10. Usage & Code Walkthrough
-
-Below is a complete, minimal walkthrough illustrating how LTM and STM interact during graph execution.
+Once compiled, invoke the autonomous research pipeline by passing a topic dictionary to `workflow.invoke(...)`:
 
 ```python
-import os
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage
-from langgraph.graph import StateGraph, START, END
-from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.store.memory import InMemoryStore
+from IPython.display import Markdown, display
 
-from src.state import AgentState
-from src.tools.calculator import calculator
-from src.tools.text_analyzer import analyze_text_code
-from src.agent import chat_node
-
+# Load GOOGLE_API_KEY and TAVILY_API_KEY from .env
 load_dotenv()
 
-# 1. Initialize Short-Term Memory Checkpointer and Long-Term Memory Store
-checkpointer = MemorySaver()
-ltm_store = InMemoryStore()
+# Invoke the compiled LangGraph workflow
+result = workflow.invoke({
+    "topic": "The impact of solid-state batteries on electric vehicle adoption in 2026"
+})
 
-# 2. Seed Developer Profile into Long-Term Memory (LTM)
-user_id = "dev_lead_01"
-ltm_store.put(
-    namespace=("users", user_id, "details"),
-    key="profile",
-    value={
-        "name": "Alex",
-        "primary_stack": "Python, FastAPI, Rust",
-        "coding_style": "Type-safe, Clean Architecture, Docstrings required",
-        "test_preference": "Pytest with high coverage"
-    }
-)
+# Render the generated Markdown report in Jupyter
+display(Markdown(result["report"]))
+```
 
-# 3. Construct and Compile the StateGraph
-tools = [calculator, analyze_text_code]
-workflow = StateGraph(AgentState)
+*(Adjust the final key—such as `result["report"]`—to match the output field defined in your graph state.)*
 
-workflow.add_node("chat_node", chat_node)
-workflow.add_node("tools", ToolNode(tools))
+### Expected Execution Flow
 
-workflow.add_edge(START, "chat_node")
-workflow.add_conditional_edges("chat_node", tools_condition)
-workflow.add_edge("tools", "chat_node")
+1. `planner_node` generates 3 focused sub-queries around solid-state battery commercialization, cost/range benchmarks, and EV automaker timelines.
+2. `search_node` queries Tavily in real time and retrieves current articles and data snippets.
+3. `synthesizer_node` filters promotional noise and reconciles conflicting production forecasts.
+4. `writer_node` returns a polished Markdown report complete with executive summary, structured sections, and comparison tables.
 
-# Compile with both checkpointer and store
-app = workflow.compile(checkpointer=checkpointer, store=ltm_store)
+---
 
-# 4. Invoke the Agent
-config = {
-    "configurable": {
-        "thread_id": "session-thread-alpha-101", # STM Scope
-        "user_id": user_id                       # LTM Scope
-    }
-}
+## Repository Structure
 
-input_payload = {
-    "messages": [
-        HumanMessage(content="Recommend an API structure for our new payment microservice.")
-    ]
-}
-
-response = app.invoke(input_payload, config=config)
-
-# Output response tailored specifically to Alex's stored profile
-print(response["messages"][-1].content)
+```text
+autonomous-research-agent/
+├── Autonomous_Research_Agent.ipynb   # Core LangGraph workflow & interactive notebook
+├── .env                              # Local API credentials (not tracked in git)
+└── README.md                         # Project documentation
 ```
 
 ---
 
-## 11. Production Roadmap
+## Future Roadmap
 
-- [x] Dual-tier state persistence (STM checkpointer + LTM namespaced store).
-- [x] Cyclic ReAct loop with automated conditional tool invocation.
-- [x] Dynamic context injection based on caller identity metadata.
-- [ ] **Enterprise LTM Scaling:** Transition from `InMemoryStore` to distributed `PostgresStore` with Docker Compose integration.
-- [ ] **Semantic Memory Search:** Vector-indexed semantic queries across past project decisions and design docs via `pgvector`.
-- [ ] **Interactive Developer UI:** Full-featured Web GUI implemented via [Streamlit](https://streamlit.io/) or Next.js.
-- [ ] **Multi-Agent Orchestration:** Specialized subgraphs for automated Code Review, Security Auditing, and Documentation generation.
+- [ ] **Iterative Reflection Loop:** Add a conditional edge after `synthesizer_node` to trigger follow-up searches if evidence coverage is insufficient.
+- [ ] **Inline Citation & Source Verification:** Enforce clickable `[Source](url)` citations with automated link validation in `writer_node`.
+- [ ] **Parallel Search Execution:** Fan out sub-queries concurrently using LangGraph's `Send` API for faster retrieval latency.
+- [ ] **Configurable Research Depth:** Support `quick`, `standard`, and `deep` modes to dynamically adjust sub-query count and Tavily search depth.
+- [ ] **Export Pipelines:** Export finished reports directly to `.md`, `.pdf`, or Notion/Google Docs.
+- [ ] **Human-in-the-Loop (HITL):** Allow users to review and edit the 3 planned sub-queries before `search_node` executes.
+- [ ] **CLI & FastAPI Wrapper:** Package the compiled graph behind a standalone Python CLI and REST/streaming endpoint.
 
 ---
 
-## 12. License & Author
+## Contributing
 
-Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for full details.
+Contributions, bug reports, and feature ideas are welcome!
 
-Developed and maintained with precision by **Senior AI & Systems Engineers**. Contributions, bug reports, and architectural RFCs are warmly welcomed via pull requests.
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/your-feature`).
+3. Commit your changes (`git commit -m "Add your feature"`).
+4. Push to the branch (`git push origin feature/your-feature`).
+5. Open a Pull Request.
+
+---
+
+## License
+
+This project is open-source and available under the [MIT License](LICENSE).
